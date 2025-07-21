@@ -11,6 +11,7 @@
         #result { margin-top: 20px; background: #f5f5f5; padding: 15px; border-radius: 5px; }
         #api-result { margin-top: 20px; background: #e8f5e8; padding: 15px; border-radius: 5px; }
         .error { background: #ffe6e6 !important; }
+        .warning { background: #fff3cd !important; }
         pre { white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
         .auth-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         .required { color: red; }
@@ -38,7 +39,7 @@
         
         <div class="form-group">
             <label for="authorization">Authorization <span class="required">*</span>:</label>
-            <input type="password" id="authorization" placeholder="Введите токен (без Bearer)">
+            <input type="password" id="authorization" placeholder="Введите токен">
         </div>
         
         <div class="form-group">
@@ -56,7 +57,8 @@
     <button onclick="connect()">Connect TON Wallet</button>
     <button onclick="generateTestData()">Создать тестовые данные</button>
     <button onclick="sendToBackend()" id="send-btn" disabled>Send to Backend</button>
-    <button onclick="showDebugInfo()">Debug Info</button>
+    <button onclick="sendOptionsRequest()" id="options-btn" disabled>Send OPTIONS Request</button>
+    <button onclick="showQR()">Показать QR для подключения</button>
     
     <div id="result"></div>
     <div id="api-result"></div>
@@ -65,15 +67,50 @@
         let walletData = null;
         let tonConnectUI = null;
         
-        // Инициализация TON Connect
+        // Несколько вариантов манифестов для тестирования
+        const manifestOptions = [
+            'https://ton-connect.github.io/demo-dapp-with-react-ui/tonconnect-manifest.json',
+            'https://app.ston.fi/tonconnect-manifest.json',
+            window.location.origin + window.location.pathname.replace('index.html', '') + 'tonconnect-manifest.json'
+        ];
+        
+        let currentManifestIndex = 0;
+
         function initTonConnect() {
             try {
+                const manifestUrl = manifestOptions[currentManifestIndex];
+                console.log('Используем манифест:', manifestUrl);
+                
+                if (tonConnectUI) {
+                    tonConnectUI.disconnect();
+                }
+                
                 tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                    manifestUrl: window.location.origin + window.location.pathname.replace('index.html', '') + 'tonconnect-manifest.json'
+                    manifestUrl: manifestUrl,
+                    buttonRootId: 'ton-connect',
+                    uiPreferences: {
+                        theme: 'LIGHT'
+                    }
                 });
                 
-                console.log('TON Connect UI инициализирован');
-                console.log('Manifest URL:', window.location.origin + window.location.pathname.replace('index.html', '') + 'tonconnect-manifest.json');
+                console.log('TON Connect UI инициализирован с манифестом:', manifestUrl);
+                
+                // Слушаем события подключения
+                tonConnectUI.onStatusChange(walletInfo => {
+                    console.log('Статус кошелька изменился:', walletInfo);
+                    if (walletInfo) {
+                        handleWalletConnected(walletInfo);
+                    }
+                });
+                
+                document.getElementById('result').innerHTML = `
+                    <div class="warning">
+                        <h3>⚡ TON Connect инициализирован</h3>
+                        <p>Манифест: ${manifestUrl}</p>
+                        <p>Если подключение не работает, попробуйте другой манифест:</p>
+                        <button onclick="tryNextManifest()">Попробовать другой манифест</button>
+                    </div>
+                `;
                 
                 return true;
             } catch (error) {
@@ -82,45 +119,92 @@
                     <div class="error">
                         <h3>❌ Ошибка инициализации TON Connect:</h3>
                         <pre>${error.message}</pre>
-                        <p>Попробуйте использовать тестовые данные</p>
+                        <button onclick="tryNextManifest()">Попробовать другой манифест</button>
                     </div>
                 `;
                 return false;
             }
         }
 
+        function tryNextManifest() {
+            currentManifestIndex = (currentManifestIndex + 1) % manifestOptions.length;
+            initTonConnect();
+        }
+
+        function handleWalletConnected(walletInfo) {
+            console.log('Кошелек подключен:', walletInfo);
+            
+            const selectedNetwork = document.getElementById('network-select').value;
+            
+            walletData = {
+                wallet_address: walletInfo.account.address,
+                user_id: parseInt(document.getElementById('user-id').value) || 0,
+                network: selectedNetwork,
+                proof: {
+                    timestamp: Math.floor(Date.now() / 1000),
+                    domain: {
+                        lengthBytes: window.location.hostname.length,
+                        value: window.location.hostname
+                    },
+                    signature: "connected_signature_" + Math.random().toString(36).substr(2, 9),
+                    payload: "connected_payload_" + Date.now(),
+                    pubkey: walletInfo.account.publicKey || "connected_pubkey_" + Math.random().toString(36).substr(2, 9)
+                },
+                public_key: walletInfo.account.publicKey || "connected_public_key_" + Math.random().toString(36).substr(2, 9)
+            };
+            
+            showWalletData();
+        }
+
         async function connect() {
-            if (!tonConnectUI && !initTonConnect()) {
+            if (!tonConnectUI) {
+                initTonConnect();
+                setTimeout(connect, 1000);
                 return;
             }
             
             try {
                 console.log('Попытка подключения кошелька...');
                 
-                const result = await tonConnectUI.connectWallet({
-                    tonProof: {
-                        payload: "test_payload_" + Date.now(),
-                        domain: window.location.hostname
-                    }
-                });
-                
+                const result = await tonConnectUI.connectWallet();
                 console.log('Результат подключения:', result);
-                processWalletConnection(result);
+                
+                if (result) {
+                    handleWalletConnected(result);
+                }
                 
             } catch (error) {
                 console.error('Connection error:', error);
                 document.getElementById('result').innerHTML = `
                     <div class="error">
-                        <h3>❌ Connection Error:</h3>
+                        <h3>❌ Ошибка подключения:</h3>
                         <pre>${error.message}</pre>
                         <p>Попробуйте:</p>
                         <ul>
-                            <li>Обновить страницу</li>
-                            <li>Использовать другой кошелек</li>
-                            <li>Создать тестовые данные</li>
+                            <li><button onclick="tryNextManifest()">Другой манифест</button></li>
+                            <li><button onclick="showQR()">QR код для мобильного</button></li>
+                            <li><button onclick="generateTestData()">Тестовые данные</button></li>
                         </ul>
                     </div>
                 `;
+            }
+        }
+
+        function showQR() {
+            document.getElementById('result').innerHTML = `
+                <div class="warning">
+                    <h3>📱 Подключение через мобильное приложение</h3>
+                    <p>1. Откройте TON кошелек на телефоне (Tonkeeper, TON Wallet, etc.)</p>
+                    <p>2. Найдите функцию "Connect to DApp" или "TON Connect"</p>
+                    <p>3. Отсканируйте QR код, который должен появиться выше</p>
+                    <p>4. Или скопируйте ссылку: <code>${window.location.href}</code></p>
+                    <div id="ton-connect-qr"></div>
+                </div>
+            `;
+            
+            // Инициализируем TON Connect с отображением QR
+            if (tonConnectUI) {
+                tonConnectUI.openModal();
             }
         }
 
@@ -147,29 +231,6 @@
             showWalletData();
         }
 
-        function processWalletConnection(result) {
-            const selectedNetwork = document.getElementById('network-select').value;
-            
-            walletData = {
-                wallet_address: result.account.address,
-                user_id: parseInt(document.getElementById('user-id').value) || 0,
-                network: selectedNetwork,
-                proof: {
-                    timestamp: result.proof?.timestamp || Math.floor(Date.now() / 1000),
-                    domain: {
-                        lengthBytes: result.proof?.domain?.lengthBytes || window.location.hostname.length,
-                        value: result.proof?.domain?.value || window.location.hostname
-                    },
-                    signature: result.proof?.signature || "test_signature_" + Math.random().toString(36).substr(2, 9),
-                    payload: result.proof?.payload || "test_payload_" + Date.now(),
-                    pubkey: result.proof?.pubkey || result.account.publicKey || "test_pubkey_" + Math.random().toString(36).substr(2, 9)
-                },
-                public_key: result.account.publicKey || "test_public_key_" + Math.random().toString(36).substr(2, 9)
-            };
-            
-            showWalletData();
-        }
-
         function showWalletData() {
             const networkName = walletData.network === "-239" ? "Mainnet" : "Testnet";
             
@@ -181,6 +242,47 @@
             `;
             
             document.getElementById('send-btn').disabled = false;
+            document.getElementById('options-btn').disabled = false;
+        }
+
+        // OPTIONS запрос (CORS preflight)
+        async function sendOptionsRequest() {
+            if (!walletData) {
+                alert('Сначала подключите кошелек или создайте тестовые данные!');
+                return;
+            }
+
+            const backendUrl = document.getElementById('backend-url').value;
+            
+            try {
+                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка OPTIONS запроса...</h3>';
+                
+                const response = await fetch(backendUrl, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'authorization, x-telegram-init-data, content-type'
+                    }
+                });
+                
+                console.log('OPTIONS response:', response);
+                console.log('Headers:', [...response.headers.entries()]);
+                
+                document.getElementById('api-result').innerHTML = `
+                    <h3>✅ OPTIONS запрос выполнен!</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>CORS Headers:</strong></p>
+                    <pre>${[...response.headers.entries()].map(([k,v]) => `${k}: ${v}`).join('\n')}</pre>
+                `;
+                
+            } catch (error) {
+                document.getElementById('api-result').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Ошибка OPTIONS запроса:</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
         }
 
         async function sendToBackend() {
@@ -203,24 +305,20 @@
             walletData.network = document.getElementById('network-select').value;
 
             try {
-                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка...</h3>';
+                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка POST запроса...</h3>';
                 
-                console.log('Отправляем на:', backendUrl);
+                console.log('Отправляем POST на:', backendUrl);
                 console.log('Данные:', walletData);
-                console.log('Заголовки:', {
-                    'Content-Type': 'application/json',
-                    'authorization': authorization,
-                    'x-telegram-init-data': telegramInitData
-                });
                 
                 const response = await fetch(backendUrl, {
                     method: 'POST',
+                    mode: 'cors', // Явно указываем CORS режим
                     headers: {
                         'Content-Type': 'application/json',
-                        'authorization': authorization, // Без Bearer, как в вашем API
+                        'authorization': authorization,
                         'x-telegram-init-data': telegramInitData
                     },
-                    body: JSON.stringify(walletData) // ИСПРАВЛЕНО: отправляем walletData, а не {user_id, amount}
+                    body: JSON.stringify(walletData)
                 });
                 
                 const responseData = await response.json();
@@ -245,49 +343,8 @@
                     <div class="error">
                         <h3>❌ Ошибка сети:</h3>
                         <pre>${error.message}</pre>
-                    </div>
-                `;
-            }
-        }
-
-        function showDebugInfo() {
-            const manifestUrl = window.location.origin + window.location.pathname.replace('index.html', '') + 'tonconnect-manifest.json';
-            
-            document.getElementById('api-result').innerHTML = `
-                <div class="debug">
-                    <h3>🔍 Debug информация:</h3>
-                    <p><strong>Текущий URL:</strong> ${window.location.href}</p>
-                    <p><strong>Origin:</strong> ${window.location.origin}</p>
-                    <p><strong>Hostname:</strong> ${window.location.hostname}</p>
-                    <p><strong>Manifest URL:</strong> ${manifestUrl}</p>
-                    <p><strong>TON Connect UI:</strong> ${tonConnectUI ? 'Инициализирован' : 'Не инициализирован'}</p>
-                    <p><strong>Wallet Data:</strong> ${walletData ? 'Готов' : 'Отсутствует'}</p>
-                    
-                    <h4>Проверка манифеста:</h4>
-                    <button onclick="checkManifest()">Проверить манифест</button>
-                </div>
-            `;
-        }
-
-        async function checkManifest() {
-            const manifestUrl = window.location.origin + window.location.pathname.replace('index.html', '') + 'tonconnect-manifest.json';
-            
-            try {
-                const response = await fetch(manifestUrl);
-                const manifest = await response.json();
-                
-                document.getElementById('api-result').innerHTML += `
-                    <div style="margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
-                        <h4>✅ Манифест найден:</h4>
-                        <pre>${JSON.stringify(manifest, null, 2)}</pre>
-                    </div>
-                `;
-            } catch (error) {
-                document.getElementById('api-result').innerHTML += `
-                    <div style="margin-top: 10px; padding: 10px; background: #ffe6e6; border-radius: 5px;">
-                        <h4>❌ Ошибка загрузки манифеста:</h4>
-                        <pre>${error.message}</pre>
-                        <p>Убедитесь, что файл tonconnect-manifest.json существует в корне репозитория</p>
+                        <p>Возможно проблема с CORS. Проверьте настройки сервера:</p>
+                        <button onclick="sendOptionsRequest()">Проверить OPTIONS</button>
                     </div>
                 `;
             }
@@ -296,7 +353,7 @@
         // Автоинициализация при загрузке страницы
         window.addEventListener('load', () => {
             console.log('Страница загружена, инициализируем TON Connect...');
-            initTonConnect();
+            setTimeout(initTonConnect, 1000);
         });
     </script>
 </body>
