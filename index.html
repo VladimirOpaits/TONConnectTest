@@ -14,34 +14,17 @@
         pre { white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
         .auth-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         .required { color: red; }
-        .network-info { font-size: 12px; color: #666; margin-top: 5px; }
-        .manifest-section { background: #fff3cd; padding: 10px; border-radius: 5px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
     <h2>TON Wallet Connection Test</h2>
     
-    <!-- Информация о манифесте -->
-    <div class="manifest-section">
-        <h4>🔧 Создание манифеста</h4>
-        <p>Для работы нужно создать файл <code>tonconnect-manifest.json</code> по адресу, который будет доступен по HTTP/HTTPS.</p>
-        <button onclick="showManifestInstructions()">Показать инструкции по манифесту</button>
-        <button onclick="useDataUrlManifest()">Использовать встроенный манифест (для тестов)</button>
-    </div>
-    
-    <!-- Секция конфигурации -->
     <div class="auth-section">
         <h3>Настройки API</h3>
         
         <div class="form-group">
-            <label for="manifest-url">URL манифеста:</label>
-            <input type="text" id="manifest-url" value="" placeholder="https://yoursite.com/tonconnect-manifest.json">
-            <div class="network-info">Оставьте пустым для использования встроенного манифеста</div>
-        </div>
-        
-        <div class="form-group">
             <label for="backend-url">URL бэкенда:</label>
-            <input type="text" id="backend-url" value="http://localhost:8000/ton/connect" placeholder="http://localhost:8000/ton/connect">
+            <input type="text" id="backend-url" value="http://localhost:8000/ton/connect">
         </div>
         
         <div class="form-group">
@@ -64,107 +47,26 @@
         
         <div class="form-group">
             <label for="user-id">User ID:</label>
-            <input type="number" id="user-id" value="0" placeholder="0">
+            <input type="number" id="user-id" value="0">
         </div>
     </div>
     
-    <!-- TON Connect -->
     <div id="ton-connect"></div>
-    <button onclick="initializeTonConnect()">Initialize TON Connect</button>
-    <button onclick="connect()" id="connect-btn" disabled>1. Connect TON Wallet</button>
-    <button onclick="sendToBackend()" id="send-btn" disabled>2. Send to Backend</button>
-    <button onclick="showCurlCommand()" id="curl-btn" disabled>Show cURL</button>
+    <button onclick="connect()">Connect TON Wallet</button>
+    <button onclick="sendToBackend()" id="send-btn" disabled>Send to Backend</button>
     
     <div id="result"></div>
     <div id="api-result"></div>
     
     <script>
-        let tonConnectUI = null;
         let walletData = null;
         
-        // Встроенный манифест для тестирования
-        const defaultManifest = {
-            "url": window.location.origin,
-            "name": "TON Wallet Test App",
-            "iconUrl": "https://ton.org/download/ton_symbol.png",
-            "termsOfUseUrl": "https://ton.org/terms",
-            "privacyPolicyUrl": "https://ton.org/privacy"
-        };
-
-        function useDataUrlManifest() {
-            const manifestBlob = new Blob([JSON.stringify(defaultManifest, null, 2)], {type: 'application/json'});
-            const manifestUrl = URL.createObjectURL(manifestBlob);
-            document.getElementById('manifest-url').value = manifestUrl;
-            
-            document.getElementById('api-result').innerHTML = `
-                <h3>✅ Встроенный манифест готов</h3>
-                <p>Теперь нажмите "Initialize TON Connect"</p>
-                <h4>Содержимое манифеста:</h4>
-                <pre>${JSON.stringify(defaultManifest, null, 2)}</pre>
-            `;
-        }
-
-        function showManifestInstructions() {
-            document.getElementById('api-result').innerHTML = `
-                <h3>📋 Создание манифеста</h3>
-                <p>Создайте файл <code>tonconnect-manifest.json</code> с содержимым:</p>
-                <pre>${JSON.stringify({
-                    "url": "https://yoursite.com",
-                    "name": "Your App Name", 
-                    "iconUrl": "https://yoursite.com/icon.png",
-                    "termsOfUseUrl": "https://yoursite.com/terms",
-                    "privacyPolicyUrl": "https://yoursite.com/privacy"
-                }, null, 2)}</pre>
-                <p><strong>Важно:</strong></p>
-                <ul>
-                    <li>Файл должен быть доступен по HTTP/HTTPS</li>
-                    <li>Content-Type должен быть application/json</li>
-                    <li>Иконка должна быть PNG размером минимум 180x180</li>
-                </ul>
-            `;
-        }
-
-        async function initializeTonConnect() {
-            try {
-                let manifestUrl = document.getElementById('manifest-url').value;
-                
-                if (!manifestUrl) {
-                    // Используем встроенный манифест
-                    const manifestBlob = new Blob([JSON.stringify(defaultManifest, null, 2)], {type: 'application/json'});
-                    manifestUrl = URL.createObjectURL(manifestBlob);
-                }
-                
-                if (tonConnectUI) {
-                    tonConnectUI.disconnect();
-                }
-                
-                tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                    manifestUrl: manifestUrl
-                });
-                
-                document.getElementById('connect-btn').disabled = false;
-                document.getElementById('result').innerHTML = `
-                    <h3>✅ TON Connect инициализирован</h3>
-                    <p>Теперь можно подключить кошелек</p>
-                `;
-                
-            } catch (error) {
-                console.error('TON Connect initialization error:', error);
-                document.getElementById('result').innerHTML = `
-                    <div class="error">
-                        <h3>❌ Ошибка инициализации TON Connect:</h3>
-                        <pre>${error.message}</pre>
-                    </div>
-                `;
-            }
-        }
+        // Используем проверенный рабочий манифест
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://ton-connect.github.io/demo-dapp-with-wallet/tonconnect-manifest.json'
+        });
 
         async function connect() {
-            if (!tonConnectUI) {
-                alert('Сначала инициализируйте TON Connect!');
-                return;
-            }
-            
             try {
                 const result = await tonConnectUI.connectWallet({
                     tonProof: {
@@ -173,7 +75,7 @@
                     }
                 });
                 
-                console.log('Full connection result:', result);
+                console.log('Connection result:', result);
                 
                 const selectedNetwork = document.getElementById('network-select').value;
                 
@@ -200,16 +102,19 @@
                     <h3>✅ Wallet Connected!</h3>
                     <p><strong>Address:</strong> ${walletData.wallet_address}</p>
                     <p><strong>Network:</strong> ${networkName} (${walletData.network})</p>
-                    <h4>Request Body для API:</h4>
                     <pre>${JSON.stringify(walletData, null, 2)}</pre>
                 `;
                 
                 document.getElementById('send-btn').disabled = false;
-                document.getElementById('curl-btn').disabled = false;
                 
             } catch (error) {
                 console.error('Connection error:', error);
-                document.getElementById('result').innerHTML = `<div class="error"><h3>❌ Connection Error:</h3><pre>${error.message}</pre></div>`;
+                document.getElementById('result').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Connection Error:</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
             }
         }
 
@@ -228,21 +133,20 @@
                 return;
             }
             
+            // Обновляем данные
             walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
             walletData.network = document.getElementById('network-select').value;
 
-            const headers = {
-                'Content-Type': 'application/json',
-                'authorization': authorization,
-                'x-telegram-init-data': telegramInitData
-            };
-
             try {
-                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка на бэкенд...</h3>';
+                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка...</h3>';
                 
                 const response = await fetch(backendUrl, {
                     method: 'POST',
-                    headers: headers,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'authorization': authorization,
+                        'x-telegram-init-data': telegramInitData
+                    },
                     body: JSON.stringify(walletData)
                 });
                 
@@ -250,7 +154,7 @@
                 
                 if (response.ok) {
                     document.getElementById('api-result').innerHTML = `
-                        <h3>✅ Успешно отправлено!</h3>
+                        <h3>✅ Успешно!</h3>
                         <p><strong>Status:</strong> ${response.status}</p>
                         <pre>${JSON.stringify(responseData, null, 2)}</pre>
                     `;
@@ -266,36 +170,12 @@
             } catch (error) {
                 document.getElementById('api-result').innerHTML = `
                     <div class="error">
-                        <h3>❌ Ошибка сети:</h3>
+                        <h3>❌ Ошибка:</h3>
                         <pre>${error.message}</pre>
                     </div>
                 `;
             }
         }
-
-        function showCurlCommand() {
-            if (!walletData) return;
-            
-            walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
-            walletData.network = document.getElementById('network-select').value;
-            
-            const curlCommand = `curl -X POST "${document.getElementById('backend-url').value}" \\
-  -H "Content-Type: application/json" \\
-  -H "authorization: ${document.getElementById('authorization').value}" \\
-  -H "x-telegram-init-data: ${document.getElementById('x-telegram-init-data').value}" \\
-  -d '${JSON.stringify(walletData)}'`;
-            
-            document.getElementById('api-result').innerHTML = `
-                <h3>📋 cURL команда:</h3>
-                <pre>${curlCommand}</pre>
-                <button onclick="navigator.clipboard.writeText(\`${curlCommand.replace(/`/g, '\\`')}\`)">Копировать</button>
-            `;
-        }
-        
-        // Автоматически использовать встроенный манифест при загрузке
-        window.addEventListener('load', () => {
-            useDataUrlManifest();
-        });
     </script>
 </body>
 </html>
