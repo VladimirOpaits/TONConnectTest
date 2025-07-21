@@ -1,7 +1,7 @@
 {
   "url": "https://vladimiropaits.github.io/TONConnectTest.github.io/",
   "name": "TON Wallet Test App",
-  "iconUrl": "https://vladimiropaits.github.io/TONConnectTest.github.io/icon.png",
-  "termsOfUseUrl": "https://vladimiropaits.github.io/TONConnectTest.github.io/terms",
-  "privacyPolicyUrl": "https://vladimiropaits.github.io/TONConnectTest.github.io/privacy"
+  "iconUrl": "https://ton.org/download/ton_symbol.png",  
+  "termsOfUseUrl": "",
+  "privacyPolicyUrl": ""
 }
