@@ -149,62 +149,64 @@
         }
 
         async function sendToBackend() {
-            if (!walletData) {
-                alert('Сначала подключите кошелек или создайте тестовые данные!');
-                return;
-            }
+    if (!walletData) {
+        alert('Сначала подключите кошелек или создайте тестовые данные!');
+        return;
+    }
 
-            const backendUrl = document.getElementById('backend-url').value;
-            const authorization = document.getElementById('authorization').value;
-            const telegramInitData = document.getElementById('x-telegram-init-data').value;
-            
-            if (!authorization || !telegramInitData) {
-                alert('Заполните все обязательные поля!');
-                return;
-            }
-            
-            walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
-            walletData.network = document.getElementById('network-select').value;
+    const backendUrl = document.getElementById('backend-url').value;
+    const authorization = document.getElementById('authorization').value;
+    const telegramInitData = document.getElementById('x-telegram-init-data').value;
+    
+    if (!authorization || !telegramInitData) {
+        alert('Заполните все обязательные поля!');
+        return;
+    }
 
-            try {
-                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка...</h3>';
-                
-                const response = await fetch(backendUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'authorization': authorization,
-                        'x-telegram-init-data': telegramInitData
-                    },
-                    body: JSON.stringify(walletData)
-                });
-                
-                const responseData = await response.json();
-                
-                if (response.ok) {
-                    document.getElementById('api-result').innerHTML = `
-                        <h3>✅ Успешно!</h3>
-                        <p><strong>Status:</strong> ${response.status}</p>
-                        <pre>${JSON.stringify(responseData, null, 2)}</pre>
-                    `;
-                } else {
-                    document.getElementById('api-result').innerHTML = `
-                        <div class="error">
-                            <h3>❌ Ошибка ${response.status}:</h3>
-                            <pre>${JSON.stringify(responseData, null, 2)}</pre>
-                        </div>
-                    `;
-                }
-                
-            } catch (error) {
-                document.getElementById('api-result').innerHTML = `
-                    <div class="error">
-                        <h3>❌ Ошибка:</h3>
-                        <pre>${error.message}</pre>
-                    </div>
-                `;
-            }
+    // Формируем тело запроса (как на скриншоте)
+    const requestBody = {
+        user_id: parseInt(document.getElementById('user-id').value) || 0,
+        amount: 3000, // Пример значения, можно сделать editable
+    };
+
+    try {
+        document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка...</h3>';
+        
+        const response = await fetch(backendUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authorization}`, // Добавляем "Bearer"
+                'x-telegram-init-data': telegramInitData,
+            },
+            body: JSON.stringify(requestBody),
+        });
+        
+        const responseData = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('api-result').innerHTML = `
+                <h3>✅ Успешно!</h3>
+                <p><strong>Status:</strong> ${response.status}</p>
+                <pre>${JSON.stringify(responseData, null, 2)}</pre>
+            `;
+        } else {
+            document.getElementById('api-result').innerHTML = `
+                <div class="error">
+                    <h3>❌ Ошибка ${response.status}:</h3>
+                    <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                </div>
+            `;
         }
+    } catch (error) {
+        document.getElementById('api-result').innerHTML = `
+            <div class="error">
+                <h3>❌ Ошибка:</h3>
+                <pre>${error.message}</pre>
+            </div>
+        `;
+    }
+}
     </script>
 </body>
 </html>
