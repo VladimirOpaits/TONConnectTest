@@ -6,7 +6,7 @@
         body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input { width: 100%; padding: 8px; font-size: 14px; box-sizing: border-box; }
+        input, select { width: 100%; padding: 8px; font-size: 14px; box-sizing: border-box; }
         button { padding: 10px 20px; font-size: 16px; margin: 5px; }
         #result { margin-top: 20px; background: #f5f5f5; padding: 15px; border-radius: 5px; }
         #api-result { margin-top: 20px; background: #e8f5e8; padding: 15px; border-radius: 5px; }
@@ -14,6 +14,7 @@
         pre { white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
         .auth-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         .required { color: red; }
+        .network-info { font-size: 12px; color: #666; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -25,7 +26,16 @@
         
         <div class="form-group">
             <label for="backend-url">URL бэкенда:</label>
-            <input type="text" id="backend-url" value="https://telegramcases-production.up.railway.app/" placeholder="https://telegramcases-production.up.railway.app/">
+            <input type="text" id="backend-url" value="http://localhost:8000/ton/connect" placeholder="http://localhost:8000/ton/connect">
+        </div>
+        
+        <div class="form-group">
+            <label for="network-select">Сеть TON:</label>
+            <select id="network-select">
+                <option value="-239">Mainnet (-239)</option>
+                <option value="-3">Testnet (-3)</option>
+            </select>
+            <div class="network-info">Выберите сеть, которую использует ваш бэкенд</div>
         </div>
         
         <div class="form-group">
@@ -71,11 +81,14 @@
                 
                 console.log('Full connection result:', result);
                 
+                // Получаем выбранную сеть
+                const selectedNetwork = document.getElementById('network-select').value;
+                
                 // Формируем данные точно по вашей схеме
                 walletData = {
                     wallet_address: result.account.address,
                     user_id: parseInt(document.getElementById('user-id').value) || 0,
-                    network: "-239", // mainnet как в вашем примере
+                    network: selectedNetwork, // Используем выбранную сеть
                     proof: {
                         timestamp: result.proof?.timestamp || Math.floor(Date.now() / 1000),
                         domain: {
@@ -89,10 +102,12 @@
                     public_key: result.account.publicKey || "test_public_key_" + Math.random().toString(36).substr(2, 9)
                 };
                 
+                const networkName = selectedNetwork === "-239" ? "Mainnet" : "Testnet";
+                
                 document.getElementById('result').innerHTML = `
                     <h3>✅ Wallet Connected!</h3>
                     <p><strong>Address:</strong> ${walletData.wallet_address}</p>
-                    <p><strong>Network:</strong> ${walletData.network}</p>
+                    <p><strong>Network:</strong> ${networkName} (${walletData.network})</p>
                     <h4>Request Body для API:</h4>
                     <pre>${JSON.stringify(walletData, null, 2)}</pre>
                 `;
@@ -127,8 +142,9 @@
                 return;
             }
             
-            // Обновляем user_id перед отправкой
+            // Обновляем данные перед отправкой
             walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
+            walletData.network = document.getElementById('network-select').value;
 
             const headers = {
                 'Content-Type': 'application/json',
@@ -191,8 +207,9 @@
             const authorization = document.getElementById('authorization').value;
             const telegramInitData = document.getElementById('x-telegram-init-data').value;
             
-            // Обновляем user_id
+            // Обновляем данные
             walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
+            walletData.network = document.getElementById('network-select').value;
             
             const curlCommand = `curl -X POST "${backendUrl}" \\
   -H "Content-Type: application/json" \\
