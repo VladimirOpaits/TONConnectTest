@@ -53,6 +53,7 @@
     
     <div id="ton-connect"></div>
     <button onclick="connect()">Connect TON Wallet</button>
+    <button onclick="generateTestData()">Создать тестовые данные</button>
     <button onclick="sendToBackend()" id="send-btn" disabled>Send to Backend</button>
     
     <div id="result"></div>
@@ -61,9 +62,9 @@
     <script>
         let walletData = null;
         
-        // Используем проверенный рабочий манифест
+        // Используем манифест из этого же репозитория
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://ton-connect.github.io/demo-dapp-with-wallet/tonconnect-manifest.json'
+            manifestUrl: window.location.origin + '/ton-wallet-test/tonconnect-manifest.json'
         });
 
         async function connect() {
@@ -71,41 +72,11 @@
                 const result = await tonConnectUI.connectWallet({
                     tonProof: {
                         payload: "test_payload_" + Date.now(),
-                        domain: window.location.hostname || "localhost"
+                        domain: window.location.hostname
                     }
                 });
                 
-                console.log('Connection result:', result);
-                
-                const selectedNetwork = document.getElementById('network-select').value;
-                
-                walletData = {
-                    wallet_address: result.account.address,
-                    user_id: parseInt(document.getElementById('user-id').value) || 0,
-                    network: selectedNetwork,
-                    proof: {
-                        timestamp: result.proof?.timestamp || Math.floor(Date.now() / 1000),
-                        domain: {
-                            lengthBytes: result.proof?.domain?.lengthBytes || (window.location.hostname || "localhost").length,
-                            value: result.proof?.domain?.value || window.location.hostname || "localhost"
-                        },
-                        signature: result.proof?.signature || "test_signature_" + Math.random().toString(36).substr(2, 9),
-                        payload: result.proof?.payload || "test_payload_" + Date.now(),
-                        pubkey: result.proof?.pubkey || result.account.publicKey || "test_pubkey_" + Math.random().toString(36).substr(2, 9)
-                    },
-                    public_key: result.account.publicKey || "test_public_key_" + Math.random().toString(36).substr(2, 9)
-                };
-                
-                const networkName = selectedNetwork === "-239" ? "Mainnet" : "Testnet";
-                
-                document.getElementById('result').innerHTML = `
-                    <h3>✅ Wallet Connected!</h3>
-                    <p><strong>Address:</strong> ${walletData.wallet_address}</p>
-                    <p><strong>Network:</strong> ${networkName} (${walletData.network})</p>
-                    <pre>${JSON.stringify(walletData, null, 2)}</pre>
-                `;
-                
-                document.getElementById('send-btn').disabled = false;
+                processWalletConnection(result);
                 
             } catch (error) {
                 console.error('Connection error:', error);
@@ -118,9 +89,68 @@
             }
         }
 
+        function generateTestData() {
+            const selectedNetwork = document.getElementById('network-select').value;
+            
+            walletData = {
+                wallet_address: "0:83dfd552e63729b472fcbcc8c45ebcc6691702558b68ec7527e1ba403a0f31a8",
+                user_id: parseInt(document.getElementById('user-id').value) || 0,
+                network: selectedNetwork,
+                proof: {
+                    timestamp: Math.floor(Date.now() / 1000),
+                    domain: {
+                        lengthBytes: window.location.hostname.length,
+                        value: window.location.hostname
+                    },
+                    signature: "test_signature_" + Math.random().toString(36).substr(2, 9),
+                    payload: "test_payload_" + Date.now(),
+                    pubkey: "test_pubkey_" + Math.random().toString(36).substr(2, 9)
+                },
+                public_key: "test_public_key_" + Math.random().toString(36).substr(2, 9)
+            };
+            
+            showWalletData();
+        }
+
+        function processWalletConnection(result) {
+            const selectedNetwork = document.getElementById('network-select').value;
+            
+            walletData = {
+                wallet_address: result.account.address,
+                user_id: parseInt(document.getElementById('user-id').value) || 0,
+                network: selectedNetwork,
+                proof: {
+                    timestamp: result.proof?.timestamp || Math.floor(Date.now() / 1000),
+                    domain: {
+                        lengthBytes: result.proof?.domain?.lengthBytes || window.location.hostname.length,
+                        value: result.proof?.domain?.value || window.location.hostname
+                    },
+                    signature: result.proof?.signature || "test_signature_" + Math.random().toString(36).substr(2, 9),
+                    payload: result.proof?.payload || "test_payload_" + Date.now(),
+                    pubkey: result.proof?.pubkey || result.account.publicKey || "test_pubkey_" + Math.random().toString(36).substr(2, 9)
+                },
+                public_key: result.account.publicKey || "test_public_key_" + Math.random().toString(36).substr(2, 9)
+            };
+            
+            showWalletData();
+        }
+
+        function showWalletData() {
+            const networkName = walletData.network === "-239" ? "Mainnet" : "Testnet";
+            
+            document.getElementById('result').innerHTML = `
+                <h3>✅ Wallet Data Ready!</h3>
+                <p><strong>Address:</strong> ${walletData.wallet_address}</p>
+                <p><strong>Network:</strong> ${networkName} (${walletData.network})</p>
+                <pre>${JSON.stringify(walletData, null, 2)}</pre>
+            `;
+            
+            document.getElementById('send-btn').disabled = false;
+        }
+
         async function sendToBackend() {
             if (!walletData) {
-                alert('Сначала подключите кошелек!');
+                alert('Сначала подключите кошелек или создайте тестовые данные!');
                 return;
             }
 
@@ -133,7 +163,6 @@
                 return;
             }
             
-            // Обновляем данные
             walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
             walletData.network = document.getElementById('network-select').value;
 
