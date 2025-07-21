@@ -14,244 +14,93 @@
         pre { white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
         .auth-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         .required { color: red; }
-        .success { background: #d4edda !important; border: 1px solid #c3e6cb; }
     </style>
 </head>
 <body>
-    <h2>TON Wallet Connection Test</h2>
-    
-    <div class="success">
-        <h4>🔍 Найденная проблема:</h4>
-        <p><strong>Валидация адреса:</strong> Бэкенд принимает только EQ/UQ адреса (48 символов)</p>
-        <p><strong>Наш адрес:</strong> Начинается с "0:" (Raw формат)</p>
-        <p><strong>Решение:</strong> Используем правильный формат адреса</p>
-    </div>
+    <h2>TON Wallet Connection</h2>
     
     <div class="auth-section">
-        <h3>Настройки API</h3>
-        
+        <h3>API Settings</h3>
         <div class="form-group">
-            <label for="backend-url">URL бэкенда:</label>
-            <input type="text" id="backend-url" value="https://telegramcases-production.up.railway.app/ton/connect">
+            <label for="backend-url">Backend URL:</label>
+            <input type="text" id="backend-url" value="https://your-api.com/ton/connect">
         </div>
-        
         <div class="form-group">
-            <label for="network-select">Сеть TON:</label>
+            <label for="network-select">TON Network:</label>
             <select id="network-select">
                 <option value="-239">Mainnet (-239)</option>
                 <option value="-3">Testnet (-3)</option>
             </select>
         </div>
-        
         <div class="form-group">
             <label for="authorization">Authorization <span class="required">*</span>:</label>
-            <input type="password" id="authorization" placeholder="Введите значение для заголовка authorization">
+            <input type="password" id="authorization" placeholder="Authorization header value">
         </div>
-        
         <div class="form-group">
             <label for="x-telegram-init-data">x-telegram-init-data <span class="required">*</span>:</label>
-            <input type="text" id="x-telegram-init-data" placeholder="Введите значение для заголовка x-telegram-init-data">
+            <input type="text" id="x-telegram-init-data" placeholder="Telegram init data">
         </div>
-        
         <div class="form-group">
             <label for="user-id">User ID:</label>
-            <input type="number" id="user-id" value="1943755838">
+            <input type="number" id="user-id" value="0">
         </div>
     </div>
     
     <div id="ton-connect-ui"></div>
-    
-    <button onclick="initTonConnect()">Инициализировать TON Connect</button>
-    <button onclick="connectWallet()">Подключить кошелек</button>
-    <button onclick="generateTestData()">Создать тестовые данные (EQ формат)</button>
     <button onclick="sendToBackend()" id="send-btn" disabled>Send to Backend</button>
-    <button onclick="validateAddress()">Проверить адрес</button>
     
     <div id="result"></div>
     <div id="api-result"></div>
     
     <script>
-        let walletData = null;
         let tonConnectUI = null;
-
-        // Конвертация адреса из raw в user-friendly формат
-        function convertRawToUserFriendly(rawAddress) {
-            // Простая конвертация для тестирования
-            // В реальности нужна библиотека, но для теста используем валидный EQ адрес
-            if (rawAddress.startsWith('0:')) {
-                // Возвращаем тестовый валидный EQ адрес
-                return 'EQD4FPq-PRDieyQKkizFTRtSDyucUIqrj0v_zXJmqaDp6_0t';
-            }
-            return rawAddress;
-        }
-
-        // Проверка формата адреса (как в бэкенде)
-        function validateTonAddress(address) {
-            return (address.startsWith('EQ') || address.startsWith('UQ')) && 
-                   address.length === 48 &&
-                   /^[A-Za-z0-9_-]+$/.test(address);
-        }
+        let walletData = null;
 
         async function initTonConnect() {
-            try {
-                console.log('Инициализация TON Connect...');
-                
-                if (tonConnectUI) {
-                    await tonConnectUI.disconnect();
-                    tonConnectUI = null;
-                }
-                
-                tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                    manifestUrl: window.location.origin + '/tonconnect-manifest.json',
-                    buttonRootId: 'ton-connect-ui'
-                });
-                
-                tonConnectUI.onStatusChange(wallet => {
-                    if (wallet) {
-                        console.log('Кошелек подключен:', wallet);
-                        processWalletConnection(wallet);
-                    }
-                });
-                
-                document.getElementById('result').innerHTML = `<h3>✅ TON Connect готов</h3>`;
-                
-            } catch (error) {
-                console.error('Ошибка инициализации:', error);
-                document.getElementById('result').innerHTML = `
-                    <div class="error">
-                        <h3>❌ Ошибка инициализации:</h3>
-                        <pre>${error.message}</pre>
-                    </div>
-                `;
-            }
+            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: window.location.origin + '/tonconnect-manifest.json',
+                buttonRootId: 'ton-connect-ui'
+            });
+
+            tonConnectUI.onStatusChange(wallet => {
+                if (wallet) processWalletConnection(wallet);
+            });
         }
 
-        async function connectWallet() {
-    try {
-        const result = await tonConnectUI.connectWallet({
-            tonProof: {  // 👈 Запрашиваем подпись
-                payload: "unique_payload_" + Date.now(),  // Уникальная строка
-                domain: window.location.hostname          // Домен вашего сайта
+        async function processWalletConnection(wallet) {
+            if (!wallet.account || !wallet.proof) {
+                throw new Error("Wallet didn't return required data");
             }
-        });
-        processWalletConnection(result);
-    } catch (error) {
-        console.error("Ошибка подключения:", error);
-    }
-}
 
-        function processWalletConnection(result) {
-    if (!result.account || !result.proof) {
-        throw new Error("Кошелёк не вернул нужные данные");
-    }
-
-    const requestData = {
-        wallet_address: result.account.address,
-        user_id: parseInt(document.getElementById('user-id').value),
-        network: result.account.chain,
-        proof: {
-            timestamp: result.proof.timestamp,
-            domain: {
-                lengthBytes: result.proof.domain.lengthBytes,
-                value: result.proof.domain.value
-            },
-            signature: result.proof.signature,
-            payload: result.proof.payload,
-            pubkey: result.proof.pubkey || result.account.publicKey
-        },
-        public_key: result.account.publicKey
-    };
-
-    console.log("Данные для бэкенда:", requestData);
-    sendToBackend(requestData);  // Отправляем на бэкенд
-}
-
-        function generateTestData() {
-            // Используем валидный EQ адрес для тестирования
-            const validAddress = 'EQD4FPq-PRDieyQKkizFTRtSDyucUIqrj0v_zXJmqaDp6_0t';
-            generateWalletData(validAddress, null);
-        }
-
-        function generateWalletData(address, publicKey) {
-            const selectedNetwork = document.getElementById('network-select').value;
-            const userId = parseInt(document.getElementById('user-id').value) || 0;
-            
-            // Строго по схеме бэкенда
             walletData = {
-                wallet_address: address,
-                user_id: userId,
-                network: selectedNetwork,
+                wallet_address: wallet.account.address,
+                user_id: parseInt(document.getElementById('user-id').value) || 0,
+                network: wallet.account.chain,
                 proof: {
-                    timestamp: Math.floor(Date.now() / 1000),
+                    timestamp: wallet.proof.timestamp,
                     domain: {
-                        lengthBytes: window.location.hostname.length,
-                        value: window.location.hostname
+                        lengthBytes: wallet.proof.domain.lengthBytes,
+                        value: wallet.proof.domain.value
                     },
-                    signature: "dGVzdF9zaWduYXR1cmU=", // base64 для "test_signature"
-                    payload: btoa("test_payload_" + Date.now()), // base64
-                    pubkey: publicKey || "test_pubkey_hex_format"
+                    signature: wallet.proof.signature,
+                    payload: wallet.proof.payload,
+                    pubkey: wallet.proof.pubkey || wallet.account.publicKey
                 },
-                public_key: publicKey || "test_public_key_hex_format"
+                public_key: wallet.account.publicKey
             };
-            
-            showWalletData();
-        }
 
-        function validateAddress() {
-            if (!walletData) {
-                document.getElementById('api-result').innerHTML = `
-                    <div class="error">
-                        <h3>❌ Нет адреса для проверки</h3>
-                        <p>Сначала создайте тестовые данные</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const address = walletData.wallet_address;
-            const isValid = validateTonAddress(address);
-
-            document.getElementById('api-result').innerHTML = `
-                <h3>🔍 Проверка адреса:</h3>
-                <p><strong>Адрес:</strong> ${address}</p>
-                <p><strong>Длина:</strong> ${address.length} символов</p>
-                <p><strong>Префикс:</strong> ${address.substring(0, 2)}</p>
-                <p><strong>Валидный:</strong> ${isValid ? '✅ Да' : '❌ Нет'}</p>
-                
-                <h4>Требования бэкенда:</h4>
-                <ul>
-                    <li>Начинается с EQ или UQ: ${(address.startsWith('EQ') || address.startsWith('UQ')) ? '✅' : '❌'}</li>
-                    <li>Длина 48 символов: ${address.length === 48 ? '✅' : '❌'}</li>
-                    <li>Только допустимые символы: ${/^[A-Za-z0-9_-]+$/.test(address) ? '✅' : '❌'}</li>
-                </ul>
-            `;
-        }
-
-        function showWalletData() {
-            const networkName = walletData.network === "-239" ? "Mainnet" : "Testnet";
-            const isValidAddress = validateTonAddress(walletData.wallet_address);
-            
+            document.getElementById('send-btn').disabled = false;
             document.getElementById('result').innerHTML = `
-                <h3>✅ Данные готовы!</h3>
+                <h3>✅ Wallet Connected</h3>
                 <p><strong>Address:</strong> ${walletData.wallet_address}</p>
-                <p><strong>Валидность:</strong> ${isValidAddress ? '✅ Валидный' : '❌ Невалидный'}</p>
-                <p><strong>Network:</strong> ${networkName} (${walletData.network})</p>
-                <p><strong>User ID:</strong> ${walletData.user_id}</p>
-                <h4>JSON для бэкенда:</h4>
+                <p><strong>Network:</strong> ${walletData.network}</p>
                 <pre>${JSON.stringify(walletData, null, 2)}</pre>
             `;
-            
-            document.getElementById('send-btn').disabled = false;
         }
 
         async function sendToBackend() {
             if (!walletData) {
-                alert('Создайте данные!');
-                return;
-            }
-
-            if (!validateTonAddress(walletData.wallet_address)) {
-                alert('❌ Адрес не прошел валидацию! Используйте валидный EQ/UQ адрес.');
+                alert('Connect wallet first!');
                 return;
             }
 
@@ -260,21 +109,12 @@
             const telegramInitData = document.getElementById('x-telegram-init-data').value;
             
             if (!authorization || !telegramInitData) {
-                alert('Заполните поля авторизации!');
+                alert('Fill all required fields!');
                 return;
             }
-            
-            // Обновляем данные
-            walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
-            walletData.network = document.getElementById('network-select').value;
 
             try {
-                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправляем...</h3>';
-                
-                console.log('=== ОТПРАВЛЯЕМ ===');
-                console.log('URL:', backendUrl);
-                console.log('Address validation:', validateTonAddress(walletData.wallet_address));
-                console.log('Data:', walletData);
+                document.getElementById('api-result').innerHTML = '<h3>⏳ Sending...</h3>';
                 
                 const response = await fetch(backendUrl, {
                     method: 'POST',
@@ -286,44 +126,34 @@
                     body: JSON.stringify(walletData)
                 });
                 
-                const responseText = await response.text();
-                console.log('Response:', response.status, responseText);
-                
-                let responseData;
-                try {
-                    responseData = JSON.parse(responseText);
-                } catch {
-                    responseData = { raw: responseText };
-                }
+                const responseData = await response.json();
                 
                 if (response.ok) {
                     document.getElementById('api-result').innerHTML = `
-                        <h3>✅ УСПЕШНО!</h3>
+                        <h3>✅ Success!</h3>
                         <p><strong>Status:</strong> ${response.status}</p>
                         <pre>${JSON.stringify(responseData, null, 2)}</pre>
                     `;
                 } else {
                     document.getElementById('api-result').innerHTML = `
                         <div class="error">
-                            <h3>❌ Ошибка ${response.status}</h3>
+                            <h3>❌ Error ${response.status}</h3>
                             <pre>${JSON.stringify(responseData, null, 2)}</pre>
                         </div>
                     `;
                 }
-                
             } catch (error) {
                 document.getElementById('api-result').innerHTML = `
                     <div class="error">
-                        <h3>❌ Ошибка сети:</h3>
+                        <h3>❌ Network Error</h3>
                         <pre>${error.message}</pre>
                     </div>
                 `;
             }
         }
 
-        // Автоинициализация
         window.addEventListener('load', () => {
-            setTimeout(initTonConnect, 1000);
+            initTonConnect();
         });
     </script>
 </body>
