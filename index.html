@@ -14,11 +14,18 @@
         pre { white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
         .auth-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         .required { color: red; }
-        .connect-status { padding: 10px; margin: 10px 0; border-radius: 5px; background: #e6f3ff; }
+        .success { background: #d4edda !important; border: 1px solid #c3e6cb; }
     </style>
 </head>
 <body>
     <h2>TON Wallet Connection Test</h2>
+    
+    <div class="success">
+        <h4>✅ Статус подключения:</h4>
+        <p><strong>CORS:</strong> ✅ Работает (OPTIONS 200)</p>
+        <p><strong>Авторизация:</strong> ✅ Работает (User ID получен)</p>
+        <p><strong>Проблема:</strong> ❌ Формат JSON (400 Bad Request)</p>
+    </div>
     
     <div class="auth-section">
         <h3>Настройки API</h3>
@@ -48,22 +55,17 @@
         
         <div class="form-group">
             <label for="user-id">User ID:</label>
-            <input type="number" id="user-id" value="0">
+            <input type="number" id="user-id" value="1943755838">
         </div>
     </div>
     
-    <!-- TON Connect UI будет здесь -->
-    <div class="connect-status">
-        <h3>TON Wallet Connection</h3>
-        <div id="ton-connect-ui"></div>
-        <p id="connection-status">Статус: Не подключен</p>
-    </div>
+    <div id="ton-connect-ui"></div>
     
     <button onclick="initTonConnect()">Инициализировать TON Connect</button>
     <button onclick="connectWallet()">Подключить кошелек</button>
     <button onclick="generateTestData()">Создать тестовые данные</button>
     <button onclick="sendToBackend()" id="send-btn" disabled>Send to Backend</button>
-    <button onclick="showCurlCommand()" id="curl-btn" disabled>Show cURL</button>
+    <button onclick="validateData()">Проверить формат данных</button>
     
     <div id="result"></div>
     <div id="api-result"></div>
@@ -72,38 +74,28 @@
         let walletData = null;
         let tonConnectUI = null;
 
-        // Инициализация TON Connect UI
         async function initTonConnect() {
             try {
                 console.log('Инициализация TON Connect...');
                 
-                // Очищаем предыдущий экземпляр
                 if (tonConnectUI) {
                     await tonConnectUI.disconnect();
                     tonConnectUI = null;
                 }
                 
-                // Создаем новый экземпляр
                 tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                     manifestUrl: 'https://ton-connect.github.io/demo-dapp-with-react-ui/tonconnect-manifest.json',
                     buttonRootId: 'ton-connect-ui'
                 });
                 
-                // Подписываемся на изменения статуса
                 tonConnectUI.onStatusChange(wallet => {
-                    console.log('Статус кошелька изменился:', wallet);
                     if (wallet) {
-                        document.getElementById('connection-status').textContent = `Статус: Подключен - ${wallet.account.address}`;
+                        console.log('Кошелек подключен:', wallet);
                         processWalletConnection(wallet);
-                    } else {
-                        document.getElementById('connection-status').textContent = 'Статус: Не подключен';
                     }
                 });
                 
-                document.getElementById('result').innerHTML = `
-                    <h3>✅ TON Connect UI инициализирован</h3>
-                    <p>Теперь можно подключать кошелек</p>
-                `;
+                document.getElementById('result').innerHTML = `<h3>✅ TON Connect готов к подключению</h3>`;
                 
             } catch (error) {
                 console.error('Ошибка инициализации:', error);
@@ -116,7 +108,6 @@
             }
         }
 
-        // Подключение кошелька
         async function connectWallet() {
             if (!tonConnectUI) {
                 alert('Сначала инициализируйте TON Connect!');
@@ -124,67 +115,43 @@
             }
             
             try {
-                console.log('Попытка подключения кошелька...');
-                
-                const result = await tonConnectUI.connectWallet();
-                console.log('Результат подключения:', result);
-                
+                await tonConnectUI.connectWallet();
             } catch (error) {
                 console.error('Ошибка подключения:', error);
-                document.getElementById('result').innerHTML = `
-                    <div class="error">
-                        <h3>❌ Ошибка подключения:</h3>
-                        <pre>${error.message}</pre>
-                    </div>
-                `;
             }
         }
 
         function processWalletConnection(wallet) {
-            console.log('Обработка подключенного кошелька:', wallet);
-            
-            const selectedNetwork = document.getElementById('network-select').value;
-            
-            // Формируем данные точно по схеме бэкенда
-            walletData = {
-                wallet_address: wallet.account.address,
-                user_id: parseInt(document.getElementById('user-id').value) || 0,
-                network: selectedNetwork,
-                proof: {
-                    timestamp: Math.floor(Date.now() / 1000),
-                    domain: {
-                        lengthBytes: window.location.hostname.length,
-                        value: window.location.hostname
-                    },
-                    signature: "connected_signature_" + Math.random().toString(36).substr(2, 9),
-                    payload: "connected_payload_" + Date.now(),
-                    pubkey: wallet.account.publicKey || "connected_pubkey_" + Math.random().toString(36).substr(2, 9)
-                },
-                public_key: wallet.account.publicKey || "connected_public_key_" + Math.random().toString(36).substr(2, 9)
-            };
-            
-            showWalletData();
+            generateWalletData(wallet.account.address, wallet.account.publicKey);
         }
 
         function generateTestData() {
+            generateWalletData(
+                "0:83dfd552e63729b472fcbcc8c45ebcc6691702558b68ec7527e1ba403a0f31a8",
+                null
+            );
+        }
+
+        function generateWalletData(address, publicKey) {
             const selectedNetwork = document.getElementById('network-select').value;
+            const userId = parseInt(document.getElementById('user-id').value) || 0;
             
-            // Формируем данные точно по схеме бэкенда
+            // Строго по схеме бэкенда - все поля как строки там где нужно
             walletData = {
-                wallet_address: "0:83dfd552e63729b472fcbcc8c45ebcc6691702558b68ec7527e1ba403a0f31a8",
-                user_id: parseInt(document.getElementById('user-id').value) || 0,
-                network: selectedNetwork,
+                wallet_address: String(address), // строка
+                user_id: Number(userId), // число  
+                network: String(selectedNetwork), // строка
                 proof: {
-                    timestamp: Math.floor(Date.now() / 1000),
+                    timestamp: Number(Math.floor(Date.now() / 1000)), // число
                     domain: {
-                        lengthBytes: window.location.hostname.length,
-                        value: window.location.hostname
+                        lengthBytes: Number(window.location.hostname.length), // число
+                        value: String(window.location.hostname) // строка
                     },
-                    signature: "test_signature_" + Math.random().toString(36).substr(2, 9),
-                    payload: "test_payload_" + Date.now(),
-                    pubkey: "test_pubkey_" + Math.random().toString(36).substr(2, 9)
+                    signature: String("test_signature_" + Math.random().toString(36).substr(2, 9)), // строка
+                    payload: String("test_payload_" + Date.now()), // строка
+                    pubkey: String(publicKey || "test_pubkey_" + Math.random().toString(36).substr(2, 9)) // строка
                 },
-                public_key: "test_public_key_" + Math.random().toString(36).substr(2, 9)
+                public_key: String(publicKey || "test_public_key_" + Math.random().toString(36).substr(2, 9)) // строка
             };
             
             showWalletData();
@@ -194,21 +161,53 @@
             const networkName = walletData.network === "-239" ? "Mainnet" : "Testnet";
             
             document.getElementById('result').innerHTML = `
-                <h3>✅ Wallet Data Ready!</h3>
+                <h3>✅ Данные готовы!</h3>
                 <p><strong>Address:</strong> ${walletData.wallet_address}</p>
                 <p><strong>Network:</strong> ${networkName} (${walletData.network})</p>
                 <p><strong>User ID:</strong> ${walletData.user_id}</p>
-                <h4>JSON для отправки (точно по схеме бэкенда):</h4>
+                <h4>JSON для бэкенда:</h4>
                 <pre>${JSON.stringify(walletData, null, 2)}</pre>
             `;
             
             document.getElementById('send-btn').disabled = false;
-            document.getElementById('curl-btn').disabled = false;
+        }
+
+        function validateData() {
+            if (!walletData) {
+                document.getElementById('api-result').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Нет данных для проверки</h3>
+                        <p>Сначала создайте тестовые данные или подключите кошелек</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const validation = {
+                wallet_address: typeof walletData.wallet_address === 'string' ? '✅' : '❌',
+                user_id: typeof walletData.user_id === 'number' ? '✅' : '❌',
+                network: typeof walletData.network === 'string' ? '✅' : '❌',
+                proof_timestamp: typeof walletData.proof?.timestamp === 'number' ? '✅' : '❌',
+                proof_domain_lengthBytes: typeof walletData.proof?.domain?.lengthBytes === 'number' ? '✅' : '❌',
+                proof_domain_value: typeof walletData.proof?.domain?.value === 'string' ? '✅' : '❌',
+                proof_signature: typeof walletData.proof?.signature === 'string' ? '✅' : '❌',
+                proof_payload: typeof walletData.proof?.payload === 'string' ? '✅' : '❌',
+                proof_pubkey: typeof walletData.proof?.pubkey === 'string' ? '✅' : '❌',
+                public_key: typeof walletData.public_key === 'string' ? '✅' : '❌'
+            };
+
+            document.getElementById('api-result').innerHTML = `
+                <h3>🔍 Валидация формата данных:</h3>
+                <pre>${JSON.stringify(validation, null, 2)}</pre>
+                <h4>Размер JSON: ${JSON.stringify(walletData).length} байт</h4>
+                <h4>Все ли поля присутствуют:</h4>
+                <p>${Object.values(validation).every(v => v === '✅') ? '✅ Все поля валидны' : '❌ Есть проблемы с типами данных'}</p>
+            `;
         }
 
         async function sendToBackend() {
             if (!walletData) {
-                alert('Сначала подключите кошелек или создайте тестовые данные!');
+                alert('Сначала создайте данные!');
                 return;
             }
 
@@ -217,26 +216,21 @@
             const telegramInitData = document.getElementById('x-telegram-init-data').value;
             
             if (!authorization || !telegramInitData) {
-                alert('Заполните все обязательные поля авторизации!');
+                alert('Заполните поля авторизации!');
                 return;
             }
             
-            // Обновляем данные перед отправкой
-            walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
-            walletData.network = document.getElementById('network-select').value;
+            // Обновляем user_id и network перед отправкой
+            walletData.user_id = Number(document.getElementById('user-id').value) || 0;
+            walletData.network = String(document.getElementById('network-select').value);
 
             try {
-                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка...</h3>';
+                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправляем данные...</h3>';
                 
-                console.log('=== ОТПРАВЛЯЕМ ЗАПРОС ===');
+                console.log('=== ФИНАЛЬНЫЙ ЗАПРОС ===');
                 console.log('URL:', backendUrl);
-                console.log('Method: POST');
-                console.log('Headers:', {
-                    'Content-Type': 'application/json',
-                    'authorization': authorization.substring(0, 10) + '...',
-                    'x-telegram-init-data': telegramInitData.substring(0, 20) + '...'
-                });
-                console.log('Body:', JSON.stringify(walletData, null, 2));
+                console.log('Data:', walletData);
+                console.log('JSON size:', JSON.stringify(walletData).length, 'bytes');
                 
                 const response = await fetch(backendUrl, {
                     method: 'POST',
@@ -248,12 +242,10 @@
                     body: JSON.stringify(walletData)
                 });
                 
-                console.log('=== ОТВЕТ СЕРВЕРА ===');
-                console.log('Status:', response.status);
-                console.log('Status Text:', response.statusText);
+                console.log('Response status:', response.status);
                 
                 const responseText = await response.text();
-                console.log('Response Body:', responseText);
+                console.log('Response body:', responseText);
                 
                 let responseData;
                 try {
@@ -264,62 +256,33 @@
                 
                 if (response.ok) {
                     document.getElementById('api-result').innerHTML = `
-                        <h3>✅ Успешно отправлено!</h3>
-                        <p><strong>Status:</strong> ${response.status} ${response.statusText}</p>
-                        <h4>Ответ сервера:</h4>
+                        <h3>✅ УСПЕШНО!</h3>
+                        <p><strong>Status:</strong> ${response.status}</p>
                         <pre>${JSON.stringify(responseData, null, 2)}</pre>
                     `;
                 } else {
                     document.getElementById('api-result').innerHTML = `
                         <div class="error">
-                            <h3>❌ Ошибка ${response.status}:</h3>
-                            <p><strong>Status Text:</strong> ${response.statusText}</p>
-                            <h4>Детали ошибки:</h4>
+                            <h3>❌ Ошибка ${response.status}</h3>
+                            <h4>Детали:</h4>
                             <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                            <button onclick="validateData()">Проверить формат данных</button>
                         </div>
                     `;
                 }
                 
             } catch (error) {
-                console.error('Ошибка запроса:', error);
                 document.getElementById('api-result').innerHTML = `
                     <div class="error">
-                        <h3>❌ Ошибка сети:</h3>
+                        <h3>❌ Сетевая ошибка:</h3>
                         <pre>${error.message}</pre>
-                        <p>Проверьте, что сервер запущен и доступен</p>
                     </div>
                 `;
             }
         }
 
-        function showCurlCommand() {
-            if (!walletData) return;
-            
-            const backendUrl = document.getElementById('backend-url').value;
-            const authorization = document.getElementById('authorization').value;
-            const telegramInitData = document.getElementById('x-telegram-init-data').value;
-            
-            // Обновляем данные
-            walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
-            walletData.network = document.getElementById('network-select').value;
-            
-            const curlCommand = `curl -X POST "${backendUrl}" \\
-  -H "Content-Type: application/json" \\
-  -H "authorization: ${authorization}" \\
-  -H "x-telegram-init-data: ${telegramInitData}" \\
-  -d '${JSON.stringify(walletData)}'`;
-            
-            document.getElementById('api-result').innerHTML = `
-                <h3>📋 cURL команда:</h3>
-                <pre>${curlCommand}</pre>
-                <button onclick="navigator.clipboard.writeText(\`${curlCommand.replace(/`/g, '\\`')}\`)">Копировать</button>
-                <p><strong>Сначала протестируйте через cURL!</strong></p>
-            `;
-        }
-
-        // Автоматическая инициализация при загрузке страницы
+        // Автоинициализация
         window.addEventListener('load', () => {
-            console.log('Страница загружена, автоматически инициализируем TON Connect...');
             setTimeout(initTonConnect, 1000);
         });
     </script>
