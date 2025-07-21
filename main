@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 8px; font-size: 14px; box-sizing: border-box; }
+        button { padding: 10px 20px; font-size: 16px; margin: 5px; }
+        #result { margin-top: 20px; background: #f5f5f5; padding: 15px; border-radius: 5px; }
+        #api-result { margin-top: 20px; background: #e8f5e8; padding: 15px; border-radius: 5px; }
+        .error { background: #ffe6e6 !important; }
+        pre { white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
+        .auth-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .required { color: red; }
+    </style>
+</head>
+<body>
+    <h2>TON Wallet Connection Test</h2>
+    
+    <!-- Секция конфигурации -->
+    <div class="auth-section">
+        <h3>Настройки API</h3>
+        
+        <div class="form-group">
+            <label for="backend-url">URL бэкенда:</label>
+            <input type="text" id="backend-url" value="https://telegramcases-production.up.railway.app/" placeholder="https://telegramcases-production.up.railway.app/">
+        </div>
+        
+        <div class="form-group">
+            <label for="authorization">Authorization <span class="required">*</span>:</label>
+            <input type="password" id="authorization" placeholder="Введите значение для заголовка authorization">
+        </div>
+        
+        <div class="form-group">
+            <label for="x-telegram-init-data">x-telegram-init-data <span class="required">*</span>:</label>
+            <input type="text" id="x-telegram-init-data" placeholder="Введите значение для заголовка x-telegram-init-data">
+        </div>
+        
+        <div class="form-group">
+            <label for="user-id">User ID:</label>
+            <input type="number" id="user-id" value="0" placeholder="0">
+        </div>
+    </div>
+    
+    <!-- TON Connect -->
+    <div id="ton-connect"></div>
+    <button onclick="connect()">1. Connect TON Wallet</button>
+    <button onclick="sendToBackend()" id="send-btn" disabled>2. Send to Backend</button>
+    <button onclick="showCurlCommand()" id="curl-btn" disabled>Show cURL</button>
+    
+    <div id="result"></div>
+    <div id="api-result"></div>
+    
+    <script>
+        let walletData = null;
+        
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://raw.githubusercontent.com/ton-community/tutorials/main/03-client/test/public/tonconnect-manifest.json'
+        });
+
+        async function connect() {
+            try {
+                const result = await tonConnectUI.connectWallet({
+                    tonProof: {
+                        payload: "test_payload_" + Date.now(),
+                        domain: window.location.hostname || "localhost"
+                    }
+                });
+                
+                console.log('Full connection result:', result);
+                
+                // Формируем данные точно по вашей схеме
+                walletData = {
+                    wallet_address: result.account.address,
+                    user_id: parseInt(document.getElementById('user-id').value) || 0,
+                    network: "-239", // mainnet как в вашем примере
+                    proof: {
+                        timestamp: result.proof?.timestamp || Math.floor(Date.now() / 1000),
+                        domain: {
+                            lengthBytes: result.proof?.domain?.lengthBytes || (window.location.hostname || "localhost").length,
+                            value: result.proof?.domain?.value || window.location.hostname || "localhost"
+                        },
+                        signature: result.proof?.signature || "test_signature_" + Math.random().toString(36).substr(2, 9),
+                        payload: result.proof?.payload || "test_payload_" + Date.now(),
+                        pubkey: result.proof?.pubkey || result.account.publicKey || "test_pubkey_" + Math.random().toString(36).substr(2, 9)
+                    },
+                    public_key: result.account.publicKey || "test_public_key_" + Math.random().toString(36).substr(2, 9)
+                };
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>✅ Wallet Connected!</h3>
+                    <p><strong>Address:</strong> ${walletData.wallet_address}</p>
+                    <p><strong>Network:</strong> ${walletData.network}</p>
+                    <h4>Request Body для API:</h4>
+                    <pre>${JSON.stringify(walletData, null, 2)}</pre>
+                `;
+                
+                // Активируем кнопки
+                document.getElementById('send-btn').disabled = false;
+                document.getElementById('curl-btn').disabled = false;
+                
+            } catch (error) {
+                console.error('Connection error:', error);
+                document.getElementById('result').innerHTML = `<div class="error"><h3>❌ Connection Error:</h3><pre>${error.message}</pre></div>`;
+            }
+        }
+
+        async function sendToBackend() {
+            if (!walletData) {
+                alert('Сначала подключите кошелек!');
+                return;
+            }
+
+            const backendUrl = document.getElementById('backend-url').value;
+            const authorization = document.getElementById('authorization').value;
+            const telegramInitData = document.getElementById('x-telegram-init-data').value;
+            
+            if (!authorization) {
+                alert('Введите значение для заголовка authorization!');
+                return;
+            }
+            
+            if (!telegramInitData) {
+                alert('Введите значение для заголовка x-telegram-init-data!');
+                return;
+            }
+            
+            // Обновляем user_id перед отправкой
+            walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'authorization': authorization,
+                'x-telegram-init-data': telegramInitData
+            };
+
+            try {
+                document.getElementById('api-result').innerHTML = '<h3>⏳ Отправка на бэкенд...</h3>';
+                
+                console.log('Sending request:', {
+                    url: backendUrl,
+                    headers: headers,
+                    body: walletData
+                });
+                
+                const response = await fetch(backendUrl, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(walletData)
+                });
+                
+                const responseData = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('api-result').innerHTML = `
+                        <h3>✅ Успешно отправлено!</h3>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <h4>Ответ от сервера:</h4>
+                        <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('api-result').innerHTML = `
+                        <div class="error">
+                            <h3>❌ Ошибка от сервера:</h3>
+                            <p><strong>Status:</strong> ${response.status}</p>
+                            <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Backend request error:', error);
+                document.getElementById('api-result').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Ошибка сети:</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        function showCurlCommand() {
+            if (!walletData) {
+                alert('Сначала подключите кошелек!');
+                return;
+            }
+            
+            const backendUrl = document.getElementById('backend-url').value;
+            const authorization = document.getElementById('authorization').value;
+            const telegramInitData = document.getElementById('x-telegram-init-data').value;
+            
+            // Обновляем user_id
+            walletData.user_id = parseInt(document.getElementById('user-id').value) || 0;
+            
+            const curlCommand = `curl -X POST "${backendUrl}" \\
+  -H "Content-Type: application/json" \\
+  -H "authorization: ${authorization}" \\
+  -H "x-telegram-init-data: ${telegramInitData}" \\
+  -d '${JSON.stringify(walletData)}'`;
+            
+            document.getElementById('api-result').innerHTML = `
+                <h3>📋 cURL команда:</h3>
+                <pre>${curlCommand}</pre>
+                <button onclick="navigator.clipboard.writeText(\`${curlCommand.replace(/`/g, '\\`')}\`)">Копировать</button>
+            `;
+        }
+    </script>
+</body>
+</html>
