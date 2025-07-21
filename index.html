@@ -32,7 +32,7 @@
         
         <div class="form-group">
             <label for="backend-url">URL бэкенда:</label>
-            <input type="text" id="backend-url" value="http://localhost:8000/ton/connect">
+            <input type="text" id="backend-url" value="https://telegramcases-production.up.railway.app/ton/connect">
         </div>
         
         <div class="form-group">
@@ -102,7 +102,7 @@
                 }
                 
                 tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                    manifestUrl: 'https://ton-connect.github.io/demo-dapp-with-react-ui/tonconnect-manifest.json',
+                    manifestUrl: window.location.origin + '/tonconnect-manifest.json',
                     buttonRootId: 'ton-connect-ui'
                 });
                 
@@ -127,33 +127,44 @@
         }
 
         async function connectWallet() {
-            if (!tonConnectUI) {
-                alert('Сначала инициализируйте TON Connect!');
-                return;
+    try {
+        const result = await tonConnectUI.connectWallet({
+            tonProof: {  // 👈 Запрашиваем подпись
+                payload: "unique_payload_" + Date.now(),  // Уникальная строка
+                domain: window.location.hostname          // Домен вашего сайта
             }
-            
-            try {
-                await tonConnectUI.connectWallet();
-            } catch (error) {
-                console.error('Ошибка подключения:', error);
-            }
-        }
+        });
+        processWalletConnection(result);
+    } catch (error) {
+        console.error("Ошибка подключения:", error);
+    }
+}
 
-        function processWalletConnection(wallet) {
-            const rawAddress = wallet.account.address;
-            const userFriendlyAddress = convertRawToUserFriendly(rawAddress);
-            
-            generateWalletData(userFriendlyAddress, wallet.account.publicKey);
-            
-            document.getElementById('result').innerHTML += `
-                <div style="margin-top: 10px; padding: 10px; background: #e6f3ff; border-radius: 5px;">
-                    <h4>🔄 Конвертация адреса:</h4>
-                    <p><strong>Raw:</strong> ${rawAddress}</p>
-                    <p><strong>User-friendly:</strong> ${userFriendlyAddress}</p>
-                    <p><strong>Валидный:</strong> ${validateTonAddress(userFriendlyAddress) ? '✅ Да' : '❌ Нет'}</p>
-                </div>
-            `;
-        }
+        function processWalletConnection(result) {
+    if (!result.account || !result.proof) {
+        throw new Error("Кошелёк не вернул нужные данные");
+    }
+
+    const requestData = {
+        wallet_address: result.account.address,
+        user_id: parseInt(document.getElementById('user-id').value),
+        network: result.account.chain,
+        proof: {
+            timestamp: result.proof.timestamp,
+            domain: {
+                lengthBytes: result.proof.domain.lengthBytes,
+                value: result.proof.domain.value
+            },
+            signature: result.proof.signature,
+            payload: result.proof.payload,
+            pubkey: result.proof.pubkey || result.account.publicKey
+        },
+        public_key: result.account.publicKey
+    };
+
+    console.log("Данные для бэкенда:", requestData);
+    sendToBackend(requestData);  // Отправляем на бэкенд
+}
 
         function generateTestData() {
             // Используем валидный EQ адрес для тестирования
