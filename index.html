@@ -57,14 +57,21 @@
         let walletData = null;
 
         async function initTonConnect() {
-            // Get the current URL and construct the manifest URL properly
-            const currentUrl = window.location.href;
-            const baseUrl = currentUrl.endsWith('/') ? currentUrl : currentUrl + '/';
-            const manifestUrl = baseUrl + 'tonconnect-manifest.json';
+            // Use a more reliable manifest URL construction
+            const manifestUrl = 'https://vladimiropaits.github.io/TONConnectTest.github.io/tonconnect-manifest.json';
             
             console.log('Manifest URL:', manifestUrl);
             
             try {
+                // First, let's test if the manifest is accessible
+                const manifestResponse = await fetch(manifestUrl);
+                if (!manifestResponse.ok) {
+                    throw new Error(`Manifest not accessible: ${manifestResponse.status} ${manifestResponse.statusText}`);
+                }
+                
+                const manifest = await manifestResponse.json();
+                console.log('Manifest loaded successfully:', manifest);
+                
                 tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                     manifestUrl: manifestUrl,
                     buttonRootId: 'ton-connect-ui'
@@ -94,7 +101,14 @@
                 document.getElementById('result').innerHTML = `
                     <div class="error">
                         <h3>❌ TON Connect Initialization Error</h3>
-                        <pre>${error.message}</pre>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p>This might be due to:</p>
+                        <ul>
+                            <li>Manifest not accessible at: ${manifestUrl}</li>
+                            <li>Network connectivity issues</li>
+                            <li>GitHub Pages not deployed yet</li>
+                        </ul>
+                        <p>Please check the browser console for more details.</p>
                     </div>
                 `;
             }
