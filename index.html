@@ -57,45 +57,93 @@
         let walletData = null;
 
         async function initTonConnect() {
-            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                manifestUrl: window.location.origin + '/tonconnect-manifest.json',
-                buttonRootId: 'ton-connect-ui'
-            });
+            // Get the current URL and construct the manifest URL properly
+            const currentUrl = window.location.href;
+            const baseUrl = currentUrl.endsWith('/') ? currentUrl : currentUrl + '/';
+            const manifestUrl = baseUrl + 'tonconnect-manifest.json';
+            
+            console.log('Manifest URL:', manifestUrl);
+            
+            try {
+                tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                    manifestUrl: manifestUrl,
+                    buttonRootId: 'ton-connect-ui'
+                });
 
-            tonConnectUI.onStatusChange(wallet => {
-                if (wallet) processWalletConnection(wallet);
-            });
+                // Listen for wallet connection status changes
+                tonConnectUI.onStatusChange(wallet => {
+                    console.log('Wallet status changed:', wallet);
+                    if (wallet && wallet.account) {
+                        processWalletConnection(wallet);
+                    } else {
+                        // Wallet disconnected
+                        walletData = null;
+                        document.getElementById('send-btn').disabled = true;
+                        document.getElementById('result').innerHTML = '<h3>❌ Wallet Disconnected</h3>';
+                    }
+                });
+
+                // Check if wallet is already connected
+                const wallet = tonConnectUI.wallet;
+                if (wallet && wallet.account) {
+                    processWalletConnection(wallet);
+                }
+                
+            } catch (error) {
+                console.error('Error initializing TON Connect:', error);
+                document.getElementById('result').innerHTML = `
+                    <div class="error">
+                        <h3>❌ TON Connect Initialization Error</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
         }
 
         async function processWalletConnection(wallet) {
-            if (!wallet.account || !wallet.proof) {
-                throw new Error("Wallet didn't return required data");
+            try {
+                if (!wallet.account) {
+                    throw new Error("Wallet account not available");
+                }
+
+                walletData = {
+                    wallet_address: wallet.account.address,
+                    user_id: parseInt(document.getElementById('user-id').value) || 0,
+                    network: wallet.account.chain,
+                    public_key: wallet.account.publicKey
+                };
+
+                // Add proof data if available
+                if (wallet.proof) {
+                    walletData.proof = {
+                        timestamp: wallet.proof.timestamp,
+                        domain: {
+                            lengthBytes: wallet.proof.domain.lengthBytes,
+                            value: wallet.proof.domain.value
+                        },
+                        signature: wallet.proof.signature,
+                        payload: wallet.proof.payload,
+                        pubkey: wallet.proof.pubkey || wallet.account.publicKey
+                    };
+                }
+
+                document.getElementById('send-btn').disabled = false;
+                document.getElementById('result').innerHTML = `
+                    <h3>✅ Wallet Connected</h3>
+                    <p><strong>Address:</strong> ${walletData.wallet_address}</p>
+                    <p><strong>Network:</strong> ${walletData.network}</p>
+                    <p><strong>Public Key:</strong> ${walletData.public_key}</p>
+                    <pre>${JSON.stringify(walletData, null, 2)}</pre>
+                `;
+            } catch (error) {
+                console.error('Error processing wallet connection:', error);
+                document.getElementById('result').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Wallet Connection Error</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
             }
-
-            walletData = {
-                wallet_address: wallet.account.address,
-                user_id: parseInt(document.getElementById('user-id').value) || 0,
-                network: wallet.account.chain,
-                proof: {
-                    timestamp: wallet.proof.timestamp,
-                    domain: {
-                        lengthBytes: wallet.proof.domain.lengthBytes,
-                        value: wallet.proof.domain.value
-                    },
-                    signature: wallet.proof.signature,
-                    payload: wallet.proof.payload,
-                    pubkey: wallet.proof.pubkey || wallet.account.publicKey
-                },
-                public_key: wallet.account.publicKey
-            };
-
-            document.getElementById('send-btn').disabled = false;
-            document.getElementById('result').innerHTML = `
-                <h3>✅ Wallet Connected</h3>
-                <p><strong>Address:</strong> ${walletData.wallet_address}</p>
-                <p><strong>Network:</strong> ${walletData.network}</p>
-                <pre>${JSON.stringify(walletData, null, 2)}</pre>
-            `;
         }
 
         async function sendToBackend() {
