@@ -4,11 +4,15 @@
   "iconUrl": "https://ton.org/download/ton_symbol.png",
   "termsOfUseUrl": "https://vladimiropaits.github.io/TONConnectTest.github.io/",
   "privacyPolicyUrl": "https://vladimiropaits.github.io/TONConnectTest.github.io/",
-  "features": ["ton_addr"],
+  "features": ["ton_addr", "ton_proof"],
   "items": [
     {
       "name": "ton_addr",
       "description": "Request wallet address"
+    },
+    {
+      "name": "ton_proof",
+      "description": "Request TON proof for authentication"
     }
   ]
 }
